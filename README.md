@@ -65,9 +65,5 @@ Register a new account via the app. The **first user to register becomes the adm
 
 ---
 
-## Admin Credentials (if you ran a seed)
-
-- **Admin:** admin@AsrInvest.com / Admin@123456
-- **User:** user@example.com / User@123456
 
 
