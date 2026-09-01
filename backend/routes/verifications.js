@@ -5,25 +5,14 @@ import fs from "fs";
 import { eq, and } from "drizzle-orm";
 import { db, verificationTable, usersTable } from "../db/index.js";
 import { requireAuth, requireAdmin } from "../middlewares/auth.js";
+import { deleteCloudinaryAsset, getCloudinaryAssetUrl, uploadToCloudinary } from "../lib/cloudinary.js";
 const router = Router();
-// Configure multer for file uploads
 const uploadDir = "uploads/verifications";
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
-const storage = multer.diskStorage({
-    destination: (_req, _file, cb) => {
-        cb(null, uploadDir);
-    },
-    filename: (_req, file, cb) => {
-        const timestamp = Date.now();
-        const ext = path.extname(file.originalname);
-        const filename = `${timestamp}${ext}`;
-        cb(null, filename);
-    },
-});
 const upload = multer({
-    storage,
+    storage: multer.memoryStorage(),
     limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
     fileFilter: (_req, file, cb) => {
         const allowedMimes = ["image/jpeg", "image/png", "image/gif", "application/pdf"];
@@ -35,6 +24,10 @@ const upload = multer({
         }
     },
 });
+
+function getVerificationDocumentUrl(value) {
+    return getCloudinaryAssetUrl(value) || (typeof value === "string" ? `/api/verification-documents/${value}` : null);
+}
 function formatVerification(v) {
     return {
         id: v.id,
@@ -64,8 +57,10 @@ router.post("/verification", requireAuth, upload.fields([
                 res.status(400).json({ error: "ID document is required" });
                 return;
             }
-            const idDocumentUrl = files.idDocument[0].filename;
-            const selfieUrl = files.selfie?.[0]?.filename ?? null;
+            const uploadedIdDoc = await uploadToCloudinary(files.idDocument[0], "verification-documents", files.idDocument[0].originalname);
+            const uploadedSelfie = files.selfie?.[0] ? await uploadToCloudinary(files.selfie[0], "verification-documents", files.selfie[0].originalname) : null;
+            const idDocumentUrl = uploadedIdDoc.secure_url;
+            const selfieUrl = uploadedSelfie?.secure_url ?? null;
             // Get existing verification (if any)
             const [existing] = await db
                 .select()
@@ -248,8 +243,10 @@ router.post("/verification/resubmit", requireAuth, upload.fields([
         res.status(400).json({ error: "ID document is required" });
         return;
     }
-    const idDocumentUrl = files.idDocument[0].filename;
-    const selfieUrl = files.selfie && files.selfie[0] ? files.selfie[0].filename : null;
+    const uploadedIdDoc = await uploadToCloudinary(files.idDocument[0], "verification-documents", files.idDocument[0].originalname);
+    const uploadedSelfie = files.selfie?.[0] ? await uploadToCloudinary(files.selfie[0], "verification-documents", files.selfie[0].originalname) : null;
+    const idDocumentUrl = uploadedIdDoc.secure_url;
+    const selfieUrl = uploadedSelfie?.secure_url ?? null;
     // Check if user already has a pending or approved verification
     const existing = await db
         .select()
@@ -392,18 +389,23 @@ router.delete("/admin/verifications/:id/documents/:type", requireAdmin, async (r
         res.status(404).json({ error: "Verification not found" });
         return;
     }
-    const filename = type === "idDocument" ? verification.idDocumentUrl : verification.selfieUrl;
-    if (!filename) {
+    const documentUrl = type === "idDocument" ? verification.idDocumentUrl : verification.selfieUrl;
+    if (!documentUrl) {
         res.status(400).json({ error: "No document available to delete" });
         return;
     }
-    const filepath = path.resolve(uploadDir, filename);
-    if (!filepath.startsWith(path.resolve(uploadDir))) {
-        res.status(403).json({ error: "Access denied" });
-        return;
+    if (documentUrl.startsWith("http://") || documentUrl.startsWith("https://")) {
+        await deleteCloudinaryAsset(documentUrl);
     }
-    if (fs.existsSync(filepath)) {
-        fs.unlinkSync(filepath);
+    else {
+        const filepath = path.resolve(uploadDir, documentUrl);
+        if (!filepath.startsWith(path.resolve(uploadDir))) {
+            res.status(403).json({ error: "Access denied" });
+            return;
+        }
+        if (fs.existsSync(filepath)) {
+            fs.unlinkSync(filepath);
+        }
     }
     const updateData = {};
     if (type === "idDocument") {

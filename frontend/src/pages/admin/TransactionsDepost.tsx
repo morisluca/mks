@@ -79,7 +79,8 @@ export default function Transactions() {
 
   const handleDownloadReceipt = async (receiptUrl: string) => {
     try {
-      const response = await fetch(import.meta.env.VITE_API_URL + receiptUrl,
+      const targetUrl = /^https?:\/\//i.test(receiptUrl) ? receiptUrl : import.meta.env.VITE_API_URL + receiptUrl;
+      const response = await fetch(targetUrl,
           {headers: {
             Authorization: "Bearer " + getToken(),
             },

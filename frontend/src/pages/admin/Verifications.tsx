@@ -407,14 +407,17 @@ export default function AdminVerificationsPage() {
                         <div className="space-y-2">
                           <p className="text-xs font-medium text-muted-foreground">ID Document</p>
                           <div className="border border-border rounded-lg p-2 bg-muted/20">
-                            {detail.idDocumentUrl ? (
-                              detail.idDocumentUrl.toLowerCase().endsWith('.pdf') ? (
+                            {detail.idDocumentUrl ? (() => {
+                              const docUrl = /^https?:\/\//i.test(detail.idDocumentUrl)
+                                ? detail.idDocumentUrl
+                                : `${import.meta.env.VITE_API_URL}/api/verification-documents/${detail.idDocumentUrl}`;
+                              return docUrl.toLowerCase().endsWith('.pdf') ? (
                                 <div className="flex items-center justify-center h-24 bg-muted/50 rounded text-xs text-muted-foreground">
                                   PDF Document
                                 </div>
                               ) : (
                                 <img
-                                  src={`${import.meta.env.VITE_API_URL}/api/verification-documents/${detail.idDocumentUrl}`}
+                                  src={docUrl}
                                   alt="ID Document"
                                   className="w-full h-24 object-cover rounded border border-border"
                                   onError={(e) => {
@@ -423,8 +426,8 @@ export default function AdminVerificationsPage() {
                                     (img.nextElementSibling as HTMLElement).style.display = 'flex';
                                   }}
                                 />
-                              )
-                            ) : (
+                              );
+                            })() : (
                               <div className="flex items-center justify-center h-24 bg-muted/50 rounded text-xs text-muted-foreground">
                                 ID document deleted
                               </div>
@@ -436,7 +439,9 @@ export default function AdminVerificationsPage() {
                           <div className="flex gap-2 items-center">
                             {detail.idDocumentUrl && (
                               <a
-                                href={`${import.meta.env.VITE_API_URL}/api/verification-documents/${detail.idDocumentUrl}`}
+                                href={/^https?:\/\//i.test(detail.idDocumentUrl)
+                                  ? detail.idDocumentUrl
+                                  : `${import.meta.env.VITE_API_URL}/api/verification-documents/${detail.idDocumentUrl}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="flex items-center gap-2 text-sm text-blue-600 hover:underline"
@@ -460,14 +465,17 @@ export default function AdminVerificationsPage() {
                         <div className="space-y-2">
                           <p className="text-xs font-medium text-muted-foreground">Selfie</p>
                           <div className="border border-border rounded-lg p-2 bg-muted/20">
-                            {detail.selfieUrl ? (
-                              detail.selfieUrl.toLowerCase().endsWith('.pdf') ? (
+                            {detail.selfieUrl ? (() => {
+                              const docUrl = /^https?:\/\//i.test(detail.selfieUrl)
+                                ? detail.selfieUrl
+                                : `${import.meta.env.VITE_API_URL}/api/verification-documents/${detail.selfieUrl}`;
+                              return docUrl.toLowerCase().endsWith('.pdf') ? (
                                 <div className="flex items-center justify-center h-24 bg-muted/50 rounded text-xs text-muted-foreground">
                                   PDF Document
                                 </div>
                               ) : (
                                 <img
-                                  src={`${import.meta.env.VITE_API_URL}/api/verification-documents/${detail.selfieUrl}`}
+                                  src={docUrl}
                                   alt="Selfie"
                                   className="w-full h-24 object-cover rounded border border-border"
                                   onError={(e) => {
@@ -476,8 +484,8 @@ export default function AdminVerificationsPage() {
                                     (img.nextElementSibling as HTMLElement).style.display = 'flex';
                                   }}
                                 />
-                              )
-                            ) : (
+                              );
+                            })() : (
                               <div className="flex items-center justify-center h-24 bg-muted/50 rounded text-xs text-muted-foreground">
                                 Selfie deleted
                               </div>
@@ -489,7 +497,9 @@ export default function AdminVerificationsPage() {
                           <div className="flex gap-2 items-center">
                             {detail.selfieUrl && (
                               <a
-                                href={`${import.meta.env.VITE_API_URL}/api/verification-documents/${detail.selfieUrl}`}
+                                href={/^https?:\/\//i.test(detail.selfieUrl)
+                                  ? detail.selfieUrl
+                                  : `${import.meta.env.VITE_API_URL}/api/verification-documents/${detail.selfieUrl}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="flex items-center gap-2 text-sm text-blue-600 hover:underline"

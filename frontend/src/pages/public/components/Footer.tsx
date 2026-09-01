@@ -1,4 +1,4 @@
-import TawkTo from "@/components/layout/TawkTo";
+// import TawkTo from "@/components/layout/TawkTo";
 
 export const Footer = () => {
   return (

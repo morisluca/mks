@@ -19,7 +19,7 @@ export function getApiUrl(): string {
   }
 
   // In development, use localhost backend
-  return "http://localhost:3001";
+  return "http://localhost:3000";
 }
 
 export async function apiCall<T>(

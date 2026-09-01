@@ -8,28 +8,16 @@ import { CreateDepositBody, CreateWithdrawalBody, ApproveTransactionParams, Reje
 import { requireAuth, requireAdmin } from "../middlewares/auth.js";
 import { sendNotificationEmail, shouldSendEmailNotifications } from "../lib/mailer.js";
 import { DepostAdminEmailTemp, DepostUserApproveEmailTemp, getSiteEmail, getsiteName, getsiteNameCurrency, withdrawalUserApproveEmailTemp } from "../lib/mailer.js";
+import { deleteCloudinaryAsset, getCloudinaryAssetUrl, uploadToCloudinary } from "../lib/cloudinary.js";
 const router = Router();
-
 
 const receiptUploadDir = "uploads/deposit_receipts";
 
 if (!fs.existsSync(receiptUploadDir)) {
     fs.mkdirSync(receiptUploadDir, { recursive: true });
 }
-const receiptStorage = multer.diskStorage({
-    destination: (_req, _file, cb) => {
-        cb(null, receiptUploadDir);
-    },
-    filename: (_req, file, cb) => {
-        const timestamp = Date.now();
-        const ext = path.extname(file.originalname);
-        const filename = `${timestamp}${ext}`;
-        cb(null, filename);
-    },
-});
-
 const receiptUpload = multer({
-    storage: receiptStorage,
+    storage: multer.memoryStorage(),
     limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: (_req, file, cb) => {
         const allowedMimes = ["image/jpeg", "image/png", "image/gif", "application/pdf"];
@@ -42,14 +30,15 @@ const receiptUpload = multer({
     },
 });
 
-function getReceiptUrl(filename) {
-    return filename ? `/api/transactions/deposit-receipts/${filename}` : null;
+function getReceiptUrl(value) {
+    if (!value) {
+        return null;
+    }
+    return getCloudinaryAssetUrl(value) || `/api/transactions/deposit-receipts/${value}`;
 }
 
 function formatTransaction(tx) {
-    const receiptUrl = typeof tx.note === "string" && /^[a-zA-Z0-9-_]+\.[a-zA-Z0-9]+$/.test(tx.note)
-        ? getReceiptUrl(tx.note)
-        : null;
+    const receiptUrl = typeof tx.note === "string" ? getReceiptUrl(tx.note) : null;
     return {
         id: tx.id,
         userId: tx.userId,
@@ -131,7 +120,12 @@ router.post("/transactions/deposit-receipt", requireAuth, receiptUpload.single("
         res.status(400).json({ error: "Invalid or inactive wallet" });
         return;
     }
-    const receiptFilename = req.file?.filename;
+    if (!req.file) {
+        res.status(400).json({ error: "Receipt is required" });
+        return;
+    }
+    const uploadedReceipt = await uploadToCloudinary(req.file, "deposit-receipts", req.file.originalname);
+    const receiptUrl = uploadedReceipt.secure_url;
     const [tx] = await db
         .insert(transactionsTable)
         .values({
@@ -140,7 +134,7 @@ router.post("/transactions/deposit-receipt", requireAuth, receiptUpload.single("
         amount: String(amount),
         currency,
         txHash,
-        note: receiptFilename,
+        note: receiptUrl,
         status: "pending",
     })
         .returning();
@@ -215,9 +209,7 @@ router.get("/admin/transactions", requireAdmin, async (_req, res) => {
         txHash: tx.txHash,
         status: tx.status,
         note: tx.note,
-        receiptUrl: typeof tx.note === "string" && /^[a-zA-Z0-9-_]+\.[a-zA-Z0-9]+$/.test(tx.note)
-            ? getReceiptUrl(tx.note)
-            : null,
+        receiptUrl: typeof tx.note === "string" ? getReceiptUrl(tx.note) : null,
         createdAt: tx.createdAt,
     })));
 });
@@ -290,20 +282,24 @@ router.delete("/admin/transactions/:id/receipt", requireAdmin, async (req, res) 
         return;
     }
 
-    if (!tx.note || typeof tx.note !== "string" || !/^[a-zA-Z0-9-_]+\.[a-zA-Z0-9]+$/.test(tx.note)) {
+    if (!tx.note || typeof tx.note !== "string") {
         res.status(400).json({ error: "No receipt to delete" });
         return;
     }
 
-    const filepath = path.resolve(receiptUploadDir, tx.note);
-    if (!filepath.startsWith(path.resolve(receiptUploadDir))) {
-        res.status(403).json({ error: "Access denied" });
-        return;
-    }
-
     try {
-        if (fs.existsSync(filepath)) {
-            fs.unlinkSync(filepath);
+        if (tx.note.startsWith("http://") || tx.note.startsWith("https://")) {
+            await deleteCloudinaryAsset(tx.note);
+        }
+        else {
+            const filepath = path.resolve(receiptUploadDir, tx.note);
+            if (!filepath.startsWith(path.resolve(receiptUploadDir))) {
+                res.status(403).json({ error: "Access denied" });
+                return;
+            }
+            if (fs.existsSync(filepath)) {
+                fs.unlinkSync(filepath);
+            }
         }
     } catch (error) {
         console.error("Error deleting receipt file:", error);
